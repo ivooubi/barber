@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -46,10 +47,6 @@ input:focus{border-color:var(--accent)}
 .opt .name{font-weight:600;font-size:15px}
 .opt .price{color:var(--sub);font-size:13px;margin-top:2px}
 .opt.sel .price{color:var(--accent)}
-.productos{background:var(--bg);border:1px solid var(--line);border-radius:16px;padding:4px 16px;margin-top:4px}
-.prod-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;font-size:14px}
-.prod-row:not(:last-child){border-bottom:1px solid var(--line)}
-.prod-row span:last-child{color:var(--sub);font-weight:600}
 
 /* Selector de fecha/hora a medida: calendario y horas uno al lado del otro, siempre visibles */
 .fecha-hora-row{display:flex;gap:10px;align-items:flex-start}
@@ -135,18 +132,22 @@ footer{text-align:center;color:var(--sub);font-size:12px;padding:20px}
     <div class="options" id="cortes">
       <div class="opt" data-corte="Degradado" data-precio="15">
         <div class="name">Degradado</div><div class="price">15 €</div></div>
-      <div class="opt" data-corte="Corte clásico" data-precio="12">
-        <div class="name">Corte clásico</div><div class="price">12 €</div></div>
+      <div class="opt" data-corte="Corte quincenal" data-precio="11">
+        <div class="name">Corte quincenal</div><div class="price">11 €</div></div>
       <div class="opt" data-corte="Mullet" data-precio="18">
         <div class="name">Mullet</div><div class="price">18 €</div></div>
       <div class="opt" data-corte="Rapado" data-precio="10">
         <div class="name">Rapado</div><div class="price">10 €</div></div>
     </div>
 
-    <label>Productos</label>
-    <div class="productos">
-      <div class="prod-row"><span>Polvos texturizantes</span><span>5€ / 10€</span></div>
-      <div class="prod-row"><span>Ceras de peinado</span><span>10€</span></div>
+    <label>Productos <span style="font-weight:400;color:var(--sub)">(opcional)</span></label>
+    <div class="options" id="productos">
+      <div class="opt" data-prod="Polvos texturizantes" data-precio="5">
+        <div class="name">Polvos texturizantes</div><div class="price">5 €</div></div>
+      <div class="opt" data-prod="Polvos texturizantes XL" data-precio="10">
+        <div class="name">Polvos texturizantes XL</div><div class="price">10 €</div></div>
+      <div class="opt" data-prod="Ceras de peinado" data-precio="10">
+        <div class="name">Ceras de peinado</div><div class="price">10 €</div></div>
     </div>
 
     <div class="total"><span>Total</span><span id="totalPrecio">— €</span></div>
@@ -250,15 +251,43 @@ function confirmDate(){
   check();
 }
 
-/* ====== SELECCIÓN DE CORTE ====== */
-let corte=null, precio=0, pago='local';
+/* ====== SELECCIÓN DE CORTE Y PRODUCTOS ====== */
+let corte=null, precio=0, pago='local', productosSel=[], esGratisQuincenal=false, precioFinal=0;
+
 document.querySelectorAll('#cortes .opt').forEach(el=>el.onclick=()=>{
   document.querySelectorAll('#cortes .opt').forEach(o=>o.classList.remove('sel'));
   el.classList.add('sel');
   corte=el.dataset.corte; precio=Number(el.dataset.precio);
-  document.getElementById('totalPrecio').textContent = precio + ' €';
-  check();
+  actualizarTotal();
 });
+
+document.querySelectorAll('#productos .opt').forEach(el=>el.onclick=()=>{
+  el.classList.toggle('sel');
+  productosSel=[...document.querySelectorAll('#productos .opt.sel')].map(o=>({nombre:o.dataset.prod, precio:Number(o.dataset.precio)}));
+  actualizarTotal();
+});
+
+['nombre','telefono','email'].forEach(id=>{
+  document.getElementById(id).addEventListener('input', ()=>{ if(corte==='Corte quincenal') actualizarTotal(); });
+});
+
+async function comprobarGratisQuincenal(){
+  if(corte!=='Corte quincenal') return false;
+  const nombre=document.getElementById('nombre').value.trim();
+  const email=document.getElementById('email').value.trim();
+  const telefono=document.getElementById('telefono').value.trim();
+  if(!nombre || !email || !telefono) return false;
+  const { data } = await sb.rpc('ya_uso_quincenal_este_mes', { p_nombre:nombre, p_email:email, p_telefono:telefono });
+  return !!data;
+}
+
+async function actualizarTotal(){
+  esGratisQuincenal = await comprobarGratisQuincenal();
+  const totalProductos = productosSel.reduce((s,p)=>s+p.precio, 0);
+  precioFinal = (esGratisQuincenal ? 0 : precio) + totalProductos;
+  document.getElementById('totalPrecio').textContent = precioFinal + ' €' + (esGratisQuincenal ? ' · corte gratis' : '');
+  check();
+}
 
 function check(){
   document.getElementById('submitBtn').disabled = !(corte && pago && fechaCitaISO);
@@ -273,13 +302,18 @@ document.getElementById('form').addEventListener('submit', async (e)=>{
 async function guardarCita(estadoPago){
   const msg=document.getElementById('msg'); const btn=document.getElementById('submitBtn');
   btn.disabled=true;
+  const gratis = await comprobarGratisQuincenal();
+  const totalProductos = productosSel.reduce((s,p)=>s+p.precio, 0);
+  const total = (gratis ? 0 : precio) + totalProductos;
   const { error } = await sb.from('citas').insert({
     nombre: document.getElementById('nombre').value,
     telefono: document.getElementById('telefono').value,
     email: document.getElementById('email').value,
     fecha_cita: fechaCitaISO,
     tipo_corte: corte,
-    precio: precio,
+    precio: total,
+    productos: productosSel.map(p=>p.nombre).join(', ') || null,
+    gratis_quincenal: gratis,
     metodo_pago: pago,
     estado_pago: estadoPago
   });
@@ -291,7 +325,7 @@ async function guardarCita(estadoPago){
     msg.className='ok';
     document.getElementById('form').reset();
     document.querySelectorAll('.opt').forEach(o=>o.classList.remove('sel'));
-    corte=null; selDay=null; selTime=null; fechaCitaISO=null;
+    corte=null; productosSel=[]; esGratisQuincenal=false; selDay=null; selTime=null; fechaCitaISO=null;
     dateDisplay.textContent='Selecciona fecha y hora';
     dateField.classList.remove('filled');
     document.getElementById('totalPrecio').textContent='— €';
