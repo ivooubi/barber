@@ -41,6 +41,7 @@ h1{font-size:28px;font-weight:700;letter-spacing:-.02em;margin:6px 0 2px}
 @keyframes cardIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 label{display:block;font-size:13px;color:var(--sub);margin:14px 0 6px;font-weight:600}
 label:first-child{margin-top:0}
+input,button{font-family:inherit}
 input{width:100%;padding:13px 14px;border-radius:14px;border:1px solid var(--line);background:var(--bg);color:var(--text);font-size:16px;outline:none;transition:border .2s}
 input:focus{border-color:var(--accent)}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
@@ -104,6 +105,10 @@ footer{text-align:center;color:var(--sub);font-size:12px;padding:20px}
 #splash.hide{opacity:0;pointer-events:none}
 @keyframes splashIn{from{opacity:0;transform:scale(.92)}to{opacity:1;transform:scale(1)}}
 @media (prefers-reduced-motion: reduce){#splash span{animation:none}}
+#poste{position:fixed;left:0;bottom:28px;width:46px;height:auto;z-index:50;pointer-events:none;transform:translateX(-120%);opacity:0;transition:transform .55s cubic-bezier(.22,1.2,.36,1),opacity .3s ease;filter:drop-shadow(2px 3px 4px rgba(0,0,0,.25))}
+#poste.show{transform:translateX(0);opacity:1}
+@media (max-width:600px){#poste{width:34px}#poste.show{transform:translateX(-25%)}}
+@media (prefers-reduced-motion: reduce){#poste,#poste.show{transform:none;transition:opacity .3s ease}}
 </style>
 </head>
 <body>
@@ -350,6 +355,20 @@ async function guardarCita(estadoPago){
     renderCal();
   }
 }
+</script>
+<img id="poste" src="barber-pole.png" alt="" aria-hidden="true" width="160" height="480" decoding="async">
+<script>
+(function(){
+  var poste=document.getElementById('poste'), visible=false, tick=false;
+  function update(){
+    tick=false;
+    var y=window.scrollY||document.documentElement.scrollTop||0;
+    if(!visible && y>80){ visible=true; poste.classList.add('show'); }
+    else if(visible && y<30){ visible=false; poste.classList.remove('show'); }
+  }
+  window.addEventListener('scroll',function(){ if(!tick){ tick=true; requestAnimationFrame(update); } },{passive:true});
+  update();
+})();
 </script>
 </body>
 </html>
